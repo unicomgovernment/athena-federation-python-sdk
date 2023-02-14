@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Mapping, Union, Generator
 
 import pyarrow as pa
 
+
 class AthenaDataSource(ABC):
     """
     AthenaDataCatalog is a class that makes it easy to build a custom data connector for Athena using Python.
@@ -53,7 +54,7 @@ class AthenaDataSource(ABC):
         Return the PyArrow schema of the given table.
 
         The default implementation uses the `columns` method to get a list of
-        of columns and returns them all of type `string`.
+        columns and returns them all of type `string`.
         """
         return pa.schema(
             [(col, pa.string()) for col in self.columns(database_name, table_name)]
@@ -73,7 +74,7 @@ class AthenaDataSource(ABC):
         return []
     
     @abstractmethod
-    def records(self, database_name: str, table_name: str, split: Mapping[str,str]) -> Union[Dict[str,List[Any]], Generator[Dict[str,List[Any]],None,None]]:
+    def records(self, database_name: str, table_name: str, split: Mapping[str, str]) -> Union[Dict[str,List[Any]], Generator[Dict[str,List[Any]],None,None]]:
         """
         Return a dictionary of records for the given table and split.
 

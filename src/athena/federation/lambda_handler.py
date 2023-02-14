@@ -6,6 +6,9 @@ import athena.federation.models as models
 
 
 class AthenaLambdaHandler(AthenaFederationSDK):
+    event = None
+    catalog_name = ""
+
     def __init__(self, data_source: AthenaDataSource, spill_bucket: str) -> None:
         super().__init__()
         print(
@@ -19,8 +22,8 @@ class AthenaLambdaHandler(AthenaFederationSDK):
         I refactored this a bit from my version so AthenaExample could be instantiated once,
         and then events processed - but I don't really like this pattern.
 
-        1. There is lots of unnecessary repetition (e.g. catalog_name being passed to every response).
-        2. It feels weird to overwrite event every time.
+        1. There are a lot of unnecessary repetition (e.g. catalog_name being passed to every response).
+        2. It feels weird to overwrite the event every time.
         3. While functional, the `getattr` approach also seems a little wierd.
         """
         # Populate attributes needed to process the event
@@ -38,7 +41,7 @@ class AthenaLambdaHandler(AthenaFederationSDK):
 
     def PingRequest(self) -> models.PingResponse:
         return models.PingResponse(
-            self.catalog_name, self.event["queryId"], self.data_source.data_source_type
+            self.catalog_name, self.event.get("queryId"), self.data_source.data_source_type
         )
 
     def ListSchemasRequest(self) -> models.ListSchemasResponse:
@@ -48,14 +51,14 @@ class AthenaLambdaHandler(AthenaFederationSDK):
     def ListTablesRequest(self) -> models.ListTablesResponse:
         database_name = self.event.get("schemaName")
         table_names = self.data_source.tables(database_name)
-        tableResponse = models.ListTablesResponse(self.catalog_name)
+        table_response = models.ListTablesResponse(self.catalog_name)
         for table_name in table_names:
-            tableResponse.addTableDefinition(database_name, table_name)
-        return tableResponse
+            table_response.addTableDefinition(database_name, table_name)
+        return table_response
 
     def GetTableRequest(self) -> models.GetTableResponse:
-        database_name = self.event.get("tableName").get("schemaName")
-        table_name = self.event.get("tableName").get("tableName")
+        database_name = self.event.get("tableName", {}).get("schemaName")
+        table_name = self.event.get("tableName", {}).get("tableName")
         schema = self.data_source.schema(database_name, table_name)
         return models.GetTableResponse(
             self.catalog_name, database_name, table_name, schema
@@ -66,8 +69,8 @@ class AthenaLambdaHandler(AthenaFederationSDK):
         # The partition schema above was reused from CloudTrail example - we need to
         # add (also?) the schema we want to pass back in a split?
         # e.g. messageIds: pa.list_(pa.int64())
-        database_name = self.event.get("tableName").get("schemaName")
-        table_name = self.event.get("tableName").get("tableName")
+        database_name = self.event.get("tableName", {}).get("schemaName")
+        table_name = self.event.get("tableName", {}).get("tableName")
         return models.GetTableLayoutResponse(
             self.catalog_name, database_name, table_name, None
         )
@@ -95,12 +98,12 @@ class AthenaLambdaHandler(AthenaFederationSDK):
         schema = AthenaSDKUtils.parse_encoded_schema(self.event["schema"]["schema"])
         database_name = self.event.get("tableName").get("schemaName")
         table_name = self.event.get("tableName").get("tableName")
-        split = self.event.get("split")
+        split = self.event.get("split", {})
         split_properties = split.get("properties", {})
 
         # If the data source returns a generator, we can begin streaming records
         # to a RecordBatchStreamWriter.
-        # Otherwise we take the response and wrap it in a list.
+        # Otherwise, we take the response and wrap it in a list.
         records = self.data_source.records(database_name, table_name, split_properties)
         if isinstance(records, dict):
             records = [records]
@@ -119,8 +122,8 @@ class AthenaLambdaHandler(AthenaFederationSDK):
                 schema,
                 {
                     "@type": "S3SpillLocation",
-                    "bucket": split.get("spillLocation").get("bucket"),
-                    "key": split.get("spillLocation").get("key") + "/spill.0",
+                    "bucket": split.get("spillLocation", {}).get("bucket"),
+                    "key": split.get("spillLocation", {}).get("key", "") + "/spill.0",
                     "directory": False,
                 },
                 None,

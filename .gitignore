@@ -8,3 +8,5 @@ dist/
 
 # Environment info
 .env
+
+.idea/
